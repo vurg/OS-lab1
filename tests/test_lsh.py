@@ -125,7 +125,6 @@ class TestLsh(unittest.TestCase):
         self.assertTrue(is_lsh_exiting_with_eof,
                         "lsh did not terminate upon EOF. \n"
                         "This might indicate that the feature is missing (exit on EOF) or that lsh has become non-responsive. \n"
-                        "A typical issue is attempting to wait on a child process that has already been reaped. \n"
                         "Ensure 'waitpid' calls are targeting the correct PID. ")
 
     def run_cmd_and_exit(self, cmd: str, check_for_zombies: bool = False) -> str:
