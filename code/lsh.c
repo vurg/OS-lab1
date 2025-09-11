@@ -35,10 +35,17 @@ void stripwhite(char *);
 
 int main(void)
 {
+  char *PATH = getenv("PATH");
+
   for (;;)
   {
     char *line;
     line = readline("> ");
+
+    if (rl_eof_found) {
+      free(line);
+      break;
+    }
 
     // Remove leading and trailing whitespace from the line
     stripwhite(line);
