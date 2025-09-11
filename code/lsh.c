@@ -35,6 +35,13 @@ void stripwhite(char *);
 
 int main(void)
 {
+  char *DEBUG_STR = getenv("DEBUG");
+  int DEBUG = 0;
+  if (DEBUG_STR) {
+    int conv = atoi(DEBUG_STR);
+    if (conv <= 1 && conv > 0) DEBUG = conv;
+  }
+
   for (;;)
   {
     char *line;
@@ -52,7 +59,8 @@ int main(void)
       if (parse(line, &cmd) == 1)
       {
         // Just prints cmd
-        print_cmd(&cmd);
+        if (DEBUG)
+          print_cmd(&cmd);
       }
       else
       {
