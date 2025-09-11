@@ -35,8 +35,6 @@ void stripwhite(char *);
 
 int main(void)
 {
-  char *PATH = getenv("PATH");
-
   for (;;)
   {
     char *line;
