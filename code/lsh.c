@@ -26,6 +26,7 @@
 
 // The <unistd.h> header is your gateway to the OS's process management facilities.
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "parse.h"
 
@@ -33,13 +34,14 @@ static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
-int main(void)
-{
+void execute_pgms(Pgm* p);
+
+int main(void) {
   char *DEBUG_STR = getenv("DEBUG");
   int DEBUG = 0;
   if (DEBUG_STR) {
     int conv = atoi(DEBUG_STR);
-    if (conv <= 1 && conv > 0) DEBUG = conv;
+    if (conv != 0) DEBUG = 1;
   }
 
   for (;;)
@@ -56,14 +58,26 @@ int main(void)
       add_history(line);
 
       Command cmd;
-      if (parse(line, &cmd) == 1)
-      {
+      if (parse(line, &cmd) == 1) {
+        // TODO: handle pipes
+        int pid = fork();
+        if (pid < 0) {
+          perror("fork"); // print error message from fork()
+        }
+        /* child process */
+        else if (pid == 0) {
+          execute_pgms(cmd.pgm);
+          _exit(1); // sanity check
+        }
+        /* parent process */
+        else {
+          waitpid(pid, NULL, 0);
+        }
+
         // Just prints cmd
-        if (DEBUG)
-          print_cmd(&cmd);
+        if (DEBUG) print_cmd(&cmd);
       }
-      else
-      {
+      else {
         printf("Parse ERROR\n");
       }
     }
@@ -73,6 +87,22 @@ int main(void)
   }
 
   return 0;
+}
+
+void execute_pgms(Pgm *p) {
+  if (p == NULL) return; // end recursion
+  execute_pgms(p->next); // recurse until the end of list
+
+  char **pl = p->pgmlist;
+  const char* file = pl[0];
+
+  if (file == NULL) {
+    _exit(1);
+  }
+
+  execvp(file, pl);
+  perror("execvp"); // print error message if present
+  _exit(1);
 }
 
 /*
@@ -146,3 +176,4 @@ void stripwhite(char *string)
 
   string[++i] = '\0';
 }
+
