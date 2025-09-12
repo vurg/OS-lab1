@@ -28,10 +28,57 @@
 #include <unistd.h>
 
 #include "parse.h"
+#include <sys/types.h>
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
+
+void run_command(Command *cmd_list)
+{
+  Pgm *pl = cmd_list->pgm;
+  int length = 0;
+
+  // First: count
+  Pgm *tmp = pl;
+  while (tmp != NULL)
+  {
+    length++;
+    tmp = tmp->next;
+  }
+
+  // Reset pl
+  pl = cmd_list->pgm;
+
+  for(int i = 0; i < length; i++) {
+    
+  }
+
+  // Run commands
+  for (int i = 0; i < length; i++)
+  {
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+      printf(" Command: %s \n", pl->pgmlist[0]);
+      execvp(pl->pgmlist[0], pl->pgmlist);
+      perror("execvp failed");
+      exit(1);
+    }
+    else if (pid > 0)
+    {
+      int status;
+      waitpid(pid, &status, 0);
+    }
+    else
+    {
+      perror("fork failed");
+      exit(1);
+    }
+
+    pl = pl->next;
+  }
+}
 
 int main(void)
 {
@@ -40,7 +87,8 @@ int main(void)
     char *line;
     line = readline("> ");
 
-    if (line == NULL) {
+    if (line == NULL)
+    {
       break;
     }
 
@@ -57,6 +105,7 @@ int main(void)
       {
         // Just prints cmd
         print_cmd(&cmd);
+        run_command(&cmd);
       }
       else
       {
@@ -114,7 +163,6 @@ static void print_pgm(Pgm *p)
     printf("]\n");
   }
 }
-
 
 /* Strip whitespace from the start and end of a string.
  *
