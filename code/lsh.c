@@ -67,17 +67,10 @@ void run_command(Command *cmd_list)
 
   // Reverse the list for left-to-right execution
   pl = reverse_list(pl);
-  cmd_list->pgm = pl;
 
   // Run commands
   for (int i = 0; i < length; i++)
   {
-
-    if (pl->pgmlist == NULL || pl->pgmlist[0] == NULL)
-    {
-      pl = pl->next;
-      continue;
-    }
 
     // Built-in: exit
     if (strcmp(pl->pgmlist[0], "exit") == 0)
