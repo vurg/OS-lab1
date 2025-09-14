@@ -34,12 +34,30 @@ static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
+Pgm *reverse_list(Pgm *head)
+{
+  Pgm *prev = NULL;
+  Pgm *current = head;
+  Pgm *next = NULL;
+
+  while (current != NULL)
+  {
+    next = current->next; // Store next node
+    current->next = prev; // Reverse the link
+    prev = current;       // Move prev to this node
+    current = next;       // Move to next node
+  }
+
+  return prev; // New head of the reversed list
+}
+
+
 void run_command(Command *cmd_list)
 {
   Pgm *pl = cmd_list->pgm;
   int length = 0;
 
-  // First: count
+  // Count number of commands
   Pgm *tmp = pl;
   while (tmp != NULL)
   {
@@ -47,16 +65,41 @@ void run_command(Command *cmd_list)
     tmp = tmp->next;
   }
 
-  // Reset pl
-  pl = cmd_list->pgm;
-
-  for(int i = 0; i < length; i++) {
-    
-  }
+  // Reverse the list for left-to-right execution
+  pl = reverse_list(pl);
+  cmd_list->pgm = pl;
 
   // Run commands
   for (int i = 0; i < length; i++)
   {
+
+    if (pl->pgmlist == NULL || pl->pgmlist[0] == NULL)
+    {
+      pl = pl->next;
+      continue;
+    }
+
+    // Built-in: exit
+    if (strcmp(pl->pgmlist[0], "exit") == 0)
+    {
+      exit(0);
+    }
+    // Built-in: cd
+    else if (strcmp(pl->pgmlist[0], "cd") == 0)
+    {
+      if (pl->pgmlist[1] == NULL)
+      {
+        fprintf(stderr, "cd: missing argument\n");
+      }
+      else if (chdir(pl->pgmlist[1]) != 0)
+      {
+        perror("cd failed");
+      }
+
+      pl = pl->next;
+      continue;
+    }
+
     pid_t pid = fork();
     if (pid == 0)
     {
