@@ -49,6 +49,10 @@ int main(void) {
     char *line;
     line = readline("> ");
 
+    if (line == NULL) {
+      break;
+    }
+
     // Remove leading and trailing whitespace from the line
     stripwhite(line);
 
