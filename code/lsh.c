@@ -28,10 +28,93 @@
 #include <unistd.h>
 
 #include "parse.h"
+#include <sys/types.h>
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
+
+Pgm *reverse_list(Pgm *head)
+{
+  Pgm *prev = NULL;
+  Pgm *current = head;
+  Pgm *next = NULL;
+
+  while (current != NULL)
+  {
+    next = current->next; // Store next node
+    current->next = prev; // Reverse the link
+    prev = current;       // Move prev to this node
+    current = next;       // Move to next node
+  }
+
+  return prev; // New head of the reversed list
+}
+
+
+void run_command(Command *cmd_list)
+{
+  Pgm *pl = cmd_list->pgm;
+  int length = 0;
+
+  // Count number of commands
+  Pgm *tmp = pl;
+  while (tmp != NULL)
+  {
+    length++;
+    tmp = tmp->next;
+  }
+
+  // Reverse the list for left-to-right execution
+  pl = reverse_list(pl);
+
+  // Run commands
+  for (int i = 0; i < length; i++)
+  {
+
+    // Built-in: exit
+    if (strcmp(pl->pgmlist[0], "exit") == 0)
+    {
+      exit(0);
+    }
+    // Built-in: cd
+    else if (strcmp(pl->pgmlist[0], "cd") == 0)
+    {
+      if (pl->pgmlist[1] == NULL)
+      {
+        fprintf(stderr, "cd: missing argument\n");
+      }
+      else if (chdir(pl->pgmlist[1]) != 0)
+      {
+        perror("cd failed");
+      }
+
+      pl = pl->next;
+      continue;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+      printf(" Command: %s \n", pl->pgmlist[0]);
+      execvp(pl->pgmlist[0], pl->pgmlist);
+      perror("execvp failed");
+      exit(1);
+    }
+    else if (pid > 0)
+    {
+      int status;
+      waitpid(pid, &status, 0);
+    }
+    else
+    {
+      perror("fork failed");
+      exit(1);
+    }
+
+    pl = pl->next;
+  }
+}
 
 int main(void)
 {
@@ -40,7 +123,8 @@ int main(void)
     char *line;
     line = readline("> ");
 
-    if (line == NULL) {
+    if (line == NULL)
+    {
       break;
     }
 
@@ -57,6 +141,7 @@ int main(void)
       {
         // Just prints cmd
         print_cmd(&cmd);
+        run_command(&cmd);
       }
       else
       {
@@ -114,7 +199,6 @@ static void print_pgm(Pgm *p)
     printf("]\n");
   }
 }
-
 
 /* Strip whitespace from the start and end of a string.
  *
