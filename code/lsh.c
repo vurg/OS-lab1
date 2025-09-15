@@ -40,8 +40,7 @@ int main(void)
     char *line;
     line = readline("> ");
 
-    if (rl_eof_found) {
-      free(line);
+    if (line == NULL) {
       break;
     }
 
