@@ -16,18 +16,12 @@
  *
  * All the best!
  */
-#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-
-// The <unistd.h> header is your gateway to the OS's process management facilities.
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 
 #include "parse.h"
 #include "command_exec.h"
