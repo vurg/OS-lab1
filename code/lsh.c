@@ -67,7 +67,7 @@ int main(void) {
         /* child process */
         else if (pid == 0) {
           execute_pgms(cmd.pgm);
-          _exit(1); // sanity check
+          exit(1); // sanity check
         }
         /* parent process */
         else {
@@ -97,12 +97,12 @@ void execute_pgms(Pgm *p) {
   const char* file = pl[0];
 
   if (file == NULL) {
-    _exit(1);
+    exit(1);
   }
 
   execvp(file, pl);
   perror("execvp"); // print error message if present
-  _exit(1);
+  exit(1);
 }
 
 /*
