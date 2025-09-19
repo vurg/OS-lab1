@@ -17,15 +17,21 @@ void cd_builtin(const char* arg) {
   }
 }
 
+
 int handle_builtins(Pgm* p) {
-  if (strcmp(p->pgmlist[0], "exit") == 0)
+  char* cmd = p->pgmlist[0];
+  if (strcmp(cmd, "exit") == 0)
   {
     exit(0);
     return 1;
   }
-  else if (strcmp(p->pgmlist[0], "cd") == 0)
+  else if (strcmp(cmd, "cd") == 0)
   {
     cd_builtin(p->pgmlist[1]);
+    return 1;
+  }
+  else if (strcmp(cmd, "..") == 0) {
+    cd_builtin("..");
     return 1;
   }
 
