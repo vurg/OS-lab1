@@ -2,6 +2,7 @@
 #include "parse.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -9,28 +10,59 @@
 #define PIPE_IN 0
 #define PIPE_OUT 1
 
+void exec_command(Command *cmd)
+{
+  Pgm *p = cmd->pgm;
+  // Handle built-in commands
+  if (strcmp(p->pgmlist[0], "exit") == 0)
+  {
+    exit(0);
+  }
+  else if (strcmp(p->pgmlist[0], "cd") == 0)
+  {
+    if (!p->pgmlist[1])
+    {
+      fprintf(stderr, "cd: missing argument\n");
+    }
+    else if (chdir(p->pgmlist[1]) != 0)
+    {
+      perror("cd");
+    }
+    return;
+  }
 
-void exec_command(Command *cmd) {
   // fork for the entire pipeline
   pid_t pid = fork();
-  if (pid < 0) {
+  if (pid < 0)
+  {
     perror("fork");
     return;
   }
 
-  if (pid == 0) {
+  if (pid == 0)
+  {
     // child executes the pipeline recursively
     exec_pipe(cmd->pgm);
     exit(1); // sanity check
-  } else {
+  }
+  else
+  {
     // parent waits for the whole pipeline
     waitpid(pid, NULL, 0);
   }
 }
 
-void exec_pipe(Pgm *p) {
+void exec_pipe(Pgm *p)
+{ 
+  // add base case to prevent infinite recursion
+  if (p == NULL) {
+      // return after single command or end of pipe chain
+      return;
+  }
+
   /* base case - leftmost command => execute and exit */
-  if (p->next == NULL) {
+  if (p->next == NULL)
+  {
     execvp(p->pgmlist[0], p->pgmlist);
     perror("execvp");
     exit(1);
@@ -38,18 +70,21 @@ void exec_pipe(Pgm *p) {
 
   /* create a pipe that will be shared by recursive calls through fork() */
   int pipefd[2];
-  if (pipe(pipefd) < 0) {
+  if (pipe(pipefd) < 0)
+  {
     perror("pipe");
     exit(1);
   }
 
   pid_t pid = fork();
-  if (pid < 0) {
+  if (pid < 0)
+  {
     perror("fork");
     exit(1);
   }
 
-  if (pid > 0) {
+  if (pid > 0)
+  {
     /* *** PARENT ***
      * executes the right-hand side of a given pipe (one command)
      * input will come from the pipe, provided by the previous recursive call
@@ -64,8 +99,10 @@ void exec_pipe(Pgm *p) {
     execvp(p->pgmlist[0], p->pgmlist);
     perror("execvp");
     exit(1);
-  } else {
-    /* *** CHILD *** 
+  }
+  else
+  {
+    /* *** CHILD ***
      * executes the left-hand side of a given pipe (rest of pipeline)
      * by redirecting stdout to a pipe and recursing
      * further left into the pipeline (builds pipeline right-to-left)
@@ -74,7 +111,7 @@ void exec_pipe(Pgm *p) {
     close(pipefd[PIPE_IN]); // not needed, child doesnt read from pipe
 
     dup2(pipefd[PIPE_OUT], STDOUT_FILENO); // redirect stdout to pipe write end
-    close(pipefd[PIPE_OUT]); // not needed anymore (already dup:ed)
+    close(pipefd[PIPE_OUT]);               // not needed anymore (already dup:ed)
 
     exec_pipe(p->next); // recurse further left
   }
