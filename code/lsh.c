@@ -17,11 +17,14 @@
  * All the best!
  */
 #include <ctype.h>
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <limits.h>
+#include <unistd.h>
 
 #include "parse.h"
 #include "command_exec.h"
@@ -39,9 +42,14 @@ int main(void) {
     if (conv != 0) DEBUG = 1;
   }
 
+  char path_buff[PATH_MAX];
+
   for (;;)
   {
     char *line;
+    if (getcwd(path_buff, sizeof(path_buff)) != NULL) {
+      printf("%s", path_buff);
+    }
     line = readline("> ");
 
     if (line == NULL) {
