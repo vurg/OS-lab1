@@ -1,8 +1,8 @@
 #include "command_exec.h"
+#include "builtins.h"
 #include "parse.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -13,23 +13,7 @@
 void exec_command(Command *cmd)
 {
   Pgm *p = cmd->pgm;
-  // Handle built-in commands
-  if (strcmp(p->pgmlist[0], "exit") == 0)
-  {
-    exit(0);
-  }
-  else if (strcmp(p->pgmlist[0], "cd") == 0)
-  {
-    if (!p->pgmlist[1])
-    {
-      fprintf(stderr, "cd: missing argument\n");
-    }
-    else if (chdir(p->pgmlist[1]) != 0)
-    {
-      perror("cd");
-    }
-    return;
-  }
+  if (handle_builtins(p)) return; // if builtin handled, return
 
   // fork for the entire pipeline
   pid_t pid = fork();
