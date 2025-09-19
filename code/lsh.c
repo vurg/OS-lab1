@@ -16,7 +16,6 @@
  *
  * All the best!
  */
-#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,17 +23,22 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-// The <unistd.h> header is your gateway to the OS's process management facilities.
-#include <unistd.h>
-
 #include "parse.h"
+#include "command_exec.h"
+
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
-int main(void)
-{
+int main(void) {
+  char *DEBUG_STR = getenv("DEBUG");
+  int DEBUG = 0;
+  if (DEBUG_STR) {
+    int conv = atoi(DEBUG_STR);
+    if (conv != 0) DEBUG = 1;
+  }
+
   for (;;)
   {
     char *line;
@@ -53,13 +57,13 @@ int main(void)
       add_history(line);
 
       Command cmd;
-      if (parse(line, &cmd) == 1)
-      {
+      if (parse(line, &cmd) == 1) {
+        exec_command(&cmd);
+
         // Just prints cmd
-        print_cmd(&cmd);
+        if (DEBUG) print_cmd(&cmd);
       }
-      else
-      {
+      else {
         printf("Parse ERROR\n");
       }
     }
@@ -70,6 +74,7 @@ int main(void)
 
   return 0;
 }
+
 
 /*
  * Print a Command structure as returned by parse on stdout.
@@ -99,7 +104,7 @@ static void print_pgm(Pgm *p)
     return;
   }
   else
-  {
+{
     char **pl = p->pgmlist;
 
     /* The list is in reversed order so print
@@ -142,3 +147,4 @@ void stripwhite(char *string)
 
   string[++i] = '\0';
 }
+
