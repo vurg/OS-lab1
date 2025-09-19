@@ -2,6 +2,7 @@
 #include "parse.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -52,7 +53,13 @@ void exec_command(Command *cmd)
 }
 
 void exec_pipe(Pgm *p)
-{
+{ 
+  // add base case to prevent infinite recursion
+  if (p == NULL) {
+      // return after single command or end of pipe chain
+      return;
+  }
+
   /* base case - leftmost command => execute and exit */
   if (p->next == NULL)
   {
