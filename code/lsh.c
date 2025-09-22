@@ -36,10 +36,11 @@ void stripwhite(char *);
 
 int main(void) {
   char *DEBUG_STR = getenv("DEBUG");
-  int DEBUG = 0;
   if (DEBUG_STR) {
     int conv = atoi(DEBUG_STR);
-    if (conv != 0) DEBUG = 1;
+    if (conv != 0) {
+      #define DEBUG
+    }
   }
 
   char path_buff[PATH_MAX];
@@ -68,8 +69,10 @@ int main(void) {
       if (parse(line, &cmd) == 1) {
         exec_command(&cmd);
 
+#ifdef DEBUG 
         // Just prints cmd
-        if (DEBUG) print_cmd(&cmd);
+        print_cmd(&cmd); 
+#endif
       }
       else {
         printf("Parse ERROR\n");
