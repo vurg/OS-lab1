@@ -18,6 +18,7 @@
  */
 #include <ctype.h>
 #include <linux/limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,8 +47,11 @@ int main(void) {
     }
   }
 
-  char path_buff[PATH_MAX];
+  // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
+  signal(SIGCHLD, SIG_IGN);
 
+  // *** MAIN LOOP ***
+  char path_buff[PATH_MAX];
   for (;;)
   {
     char *line;

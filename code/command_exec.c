@@ -87,9 +87,11 @@ void exec_pipe(Pgm *p, int is_background)
 
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
 
-  for (size_t i = 0; i < ncmd; i++) {
-    // wait for each process, dont hang if in background
-    waitpid(pids[i], NULL, (is_background) ? WNOHANG : 0);
+  // wait for each foreground process (bg processes reaped asynchronously)
+  if (!is_background) {
+    for (size_t i = 0; i < ncmd; i++) {
+      waitpid(pids[i], NULL, 0);
+    }
   }
 }
 
