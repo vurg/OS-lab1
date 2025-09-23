@@ -39,16 +39,6 @@
 // process groups allow you to send signals to all processes in the pipeline at once
 
 
-// Each pipeline creates its own process group and passes terminal control to it
-void set_foreground_pgid(pid_t pgid) {
-    tcsetpgrp(STDIN_FILENO, pgid); // pass terminal control to (child's) pgroup
-}
-
-// Function to clear the foreground process group after the process has finished
-void clear_foreground_pgid(void) {
-    tcsetpgrp(STDIN_FILENO, getpgrp()); // restore terminal control to shell
-}
-
 // *** SIGNAL HANDLER ***
 // Handler for SIGINT (Ctrl-C)
 //  if the shell is in foreground, do not stop it

@@ -17,8 +17,21 @@ extern void clear_foreground_pgid(void);
 
 void close_pipes(int pipes[][2], size_t n) {
   for (size_t i = 0; i < n; i++) {
-    close(pipes[i][0]);
-    close(pipes[i][1]);
+    if (close(pipes[i][0]) < 0 ||
+        close(pipes[i][1]) < 0) {
+
+      perror("close");
+      exit(1);
+    }
+  }
+}
+
+void safe_dup2(int old_fd, int new_fd) {
+  if (old_fd != -1 && old_fd != new_fd) {
+    if (dup2(old_fd, new_fd) < 0) {
+      perror("dup2");
+      exit(1);
+    }
   }
 }
 
@@ -62,6 +75,7 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 
     if (pid == 0) {
       /* *** CHILD ***
+       * - first child creates a pgroup and sets itself as leader
        * - connects needed pipes to stdin/-out
        *    stdout to write-end of pipe (written to by the previous command), if not last command
        *    stdout to read-end of pipe (read by the previous command)
@@ -71,21 +85,22 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
       // Always create new process group for the first child
       if (i == 0) {
         setpgid(0, 0); // create new process group with this process as leader
-      } else {
-        // parent sets up process group for other children - parent calls setpgid
+        // might be redundant, but avoids an edge case when child executes before parent gets to set pgroup
       }
+      // parent sets up process group for other children - parent calls setpgid
 
       if (i > 0) { // if not last command (not first in list)
         // connect stdout to write end of prev command (next command in list)
-        dup2(pipes[i-1][1], STDOUT_FILENO); 
-      } else if (redir_fd[1] != -1 && redir_fd[1] != STDOUT_FILENO){
-        dup2(redir_fd[1], STDOUT_FILENO);
+        safe_dup2(pipes[i-1][1], STDOUT_FILENO); 
+      } else {
+        safe_dup2(redir_fd[1], STDOUT_FILENO); // redirect if needed
       }
+
       if (cur->next) { // if not first command (not last in list)
         // connect stdin to read end
-        dup2(pipes[i][0], STDIN_FILENO);
-      } else if (redir_fd[0] != -1 && redir_fd[0] != STDIN_FILENO) {
-        dup2(redir_fd[0], STDIN_FILENO);
+        safe_dup2(pipes[i][0], STDIN_FILENO);
+      } else {
+        safe_dup2(redir_fd[0], STDIN_FILENO); // redirect if needed
       }
 
       close_pipes(pipes, ncmd - 1); // close all pipes, not needed anymore (already dup:d)
@@ -96,7 +111,6 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
       exit(1);
 
     } else {
-
       /* *** PARENT *** */
       pids[i] = pid;
       
@@ -117,17 +131,15 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
 
-  // Set foreground process group if not background
   if (!is_background) {
-    set_foreground_pgid(pgid);
-  }
+    tcsetpgrp(STDIN_FILENO, pgid); // set pipeline pgroup as foreground
 
-  // wait for each foreground process (bg processes reaped asynchronously)
-  if (!is_background) {
+    // wait for each foreground process (bg processes reaped asynchronously)
     for (size_t i = 0; i < ncmd; i++) {
       waitpid(pids[i], NULL, 0);
     }
-    clear_foreground_pgid(); // clear the foreground pgid variable
+
+    tcsetpgrp(STDIN_FILENO, getpgrp()); // set shell to foreground
   }
 }
 
