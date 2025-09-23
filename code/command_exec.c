@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 #define PIPE_IN 0
 #define PIPE_OUT 1
@@ -27,7 +28,7 @@ void close_pipes(int pipes[][2], size_t n) {
  *           STDIN        ps[2][1]        ps[1][1]       ps[0][1]     <- stdin redirection
  *
  */
-void exec_pipe(Pgm *p, int is_background) 
+void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 {
   // count the number of commands
   size_t ncmd = 0;
@@ -65,10 +66,14 @@ void exec_pipe(Pgm *p, int is_background)
       if (i > 0) { // if not last command (not first in list)
         // connect stdout to write end of prev command (next command in list)
         dup2(pipes[i-1][1], STDOUT_FILENO); 
+      } else if (redir_fd[1] != -1 && redir_fd[1] != STDOUT_FILENO){
+        dup2(redir_fd[1], STDOUT_FILENO);
       }
       if (cur->next) { // if not first command (not last in list)
         // connect stdin to read end
         dup2(pipes[i][0], STDIN_FILENO);
+      } else if (redir_fd[0] != -1 && redir_fd[0] != STDIN_FILENO) {
+        dup2(redir_fd[0], STDIN_FILENO);
       }
 
       close_pipes(pipes, ncmd - 1); // close all pipes, not needed anymore (already dup:d)
@@ -99,6 +104,26 @@ void exec_command(Command *cmd)
 {
   Pgm *p = cmd->pgm;
   if (handle_builtins(p)) return; // if builtin handled, return
-  exec_pipe(p, cmd->background);
+
+  int redir_fd[2] = {-1, -1};
+  if (cmd->rstdin) {
+    if ((redir_fd[0] = open(cmd->rstdin, O_RDONLY)) == -1) {
+      perror("open");
+      return;
+    }
+  }
+  if (cmd->rstdout) {
+    if ((redir_fd[1] = open(cmd->rstdout, O_WRONLY | O_APPEND | O_CREAT, 0644)) == -1) {
+      perror("open");
+      return;
+    }
+  }
+
+  exec_pipe(p, redir_fd, cmd->background);
+
+  for (int i = 0; i < 2; i++) {
+    if (redir_fd[i] != -1)
+      close(redir_fd[i]);
+  }
 }
 
