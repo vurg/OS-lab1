@@ -6,13 +6,15 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 #define PIPE_IN 0
 #define PIPE_OUT 1
 
-
-void close_pipes(int pipes[][2], size_t n) {
-  for (size_t i = 0; i < n; i++) {
+void close_pipes(int pipes[][2], size_t n)
+{
+  for (size_t i = 0; i < n; i++)
+  {
     close(pipes[i][0]);
     close(pipes[i][1]);
   }
@@ -27,48 +29,83 @@ void close_pipes(int pipes[][2], size_t n) {
  *           STDIN        ps[2][1]        ps[1][1]       ps[0][1]     <- stdin redirection
  *
  */
-void exec_pipe(Pgm *p) 
+void exec_pipe(Pgm *p, Command *cmd)
 {
   // count the number of commands
   size_t ncmd = 0;
-  for (Pgm *t = p; t != NULL; t = t->next) ++ncmd;
+  for (Pgm *t = p; t != NULL; t = t->next)
+    ++ncmd;
 
   // prepare pipes
-  int pipes[ncmd - 1][2]; 
-  for (size_t i = 0; i < ncmd - 1; i++) {
-    if (pipe(pipes[i]) < 0) {
+  int pipes[ncmd - 1][2];
+  for (size_t i = 0; i < ncmd - 1; i++)
+  {
+    if (pipe(pipes[i]) < 0)
+    {
       perror("pipe");
       exit(1);
     }
   }
 
   // loop through all commands
-  Pgm* cur = p;
-  for (size_t i = 0; i < ncmd; i++, cur = cur->next) {
+  Pgm *cur = p;
+  for (size_t i = 0; i < ncmd; i++, cur = cur->next)
+  {
     pid_t pid;
-    if ((pid = fork()) < 0) {
+    if ((pid = fork()) < 0)
+    {
       perror("fork");
       exit(1);
     }
 
-    if (pid == 0) {
+    if (pid == 0)
+    {
       /* *** CHILD ***
        * - connects needed pipes to stdin/-out
        *    stdout to write-end of pipe (written to by the previous command), if not last command
        *    stdout to read-end of pipe (read by the previous command)
        * - executes the command
-      */
+       */
 
-      if (i > 0) { // if not last command (not first in list)
+      if (i > 0)
+      { // if not last command (not first in list)
         // connect stdout to write end of prev command (next command in list)
-        dup2(pipes[i-1][1], STDOUT_FILENO); 
+        dup2(pipes[i - 1][1], STDOUT_FILENO);
       }
-      if (cur->next) { // if not first command (not last in list)
+      if (cur->next)
+      { // if not first command (not last in list)
         // connect stdin to read end
         dup2(pipes[i][0], STDIN_FILENO);
       }
 
       close_pipes(pipes, ncmd - 1); // close all pipes, not needed anymore (already dup:d)
+
+      // Input redirection (only for first command)
+      if (i == 0 && cmd->rstdin)
+      {
+        int fd = open(cmd->rstdin, O_RDONLY);
+        if (fd < 0)
+        {
+          perror("open input");
+          exit(1);
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+      }
+
+      // Output redirection (only for last command)
+      if ((i==ncmd-1) && cmd->rstdout)
+      {
+        int fd = open(cmd->rstdout, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0)
+        {
+          perror("open output");
+          exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+      }
+
       execvp(*cur->pgmlist, cur->pgmlist);
 
       // if error
@@ -80,13 +117,14 @@ void exec_pipe(Pgm *p)
 
   // *** PARENT ***
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
-  while (wait(NULL) > 0); // reap children
+  while (wait(NULL) > 0)
+    ; // reap children
 }
 
 void exec_command(Command *cmd)
 {
   Pgm *p = cmd->pgm;
-  if (handle_builtins(p)) return; // if builtin handled, return
-  exec_pipe(p);
+  if (handle_builtins(p))
+    return; // if builtin handled, return
+  exec_pipe(p, cmd);
 }
-
