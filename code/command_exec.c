@@ -28,7 +28,7 @@ void close_pipes(int pipes[][2], size_t n) {
  *           STDIN        ps[2][1]        ps[1][1]       ps[0][1]     <- stdin redirection
  *
  */
-void exec_pipe(Pgm *p, int redir_fd[2]) 
+void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 {
   // count the number of commands
   size_t ncmd = 0;
@@ -43,7 +43,10 @@ void exec_pipe(Pgm *p, int redir_fd[2])
     }
   }
 
+  if (is_background) printf("[bg]"); // header for printing out pid:s
+
   // loop through all commands
+  pid_t pids[ncmd];
   Pgm* cur = p;
   for (size_t i = 0; i < ncmd; i++, cur = cur->next) {
     pid_t pid;
@@ -80,12 +83,21 @@ void exec_pipe(Pgm *p, int redir_fd[2])
       perror("execvp");
       exit(1);
     }
-    // parent just passes to next iteration
+
+    // *** PARENT ***
+    pids[i] = pid;
+    if (is_background) 
+      printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
   }
 
-  // *** PARENT ***
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
-  while (wait(NULL) > 0); // reap children
+
+  // wait for each foreground process (bg processes reaped asynchronously)
+  if (!is_background) {
+    for (size_t i = 0; i < ncmd; i++) {
+      waitpid(pids[i], NULL, 0);
+    }
+  }
 }
 
 void exec_command(Command *cmd)
@@ -107,7 +119,7 @@ void exec_command(Command *cmd)
     }
   }
 
-  exec_pipe(p, redir_fd);
+  exec_pipe(p, redir_fd, cmd->background);
 
   for (int i = 0; i < 2; i++) {
     if (redir_fd[i] != -1)

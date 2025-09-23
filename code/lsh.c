@@ -18,6 +18,7 @@
  */
 #include <ctype.h>
 #include <linux/limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,16 +36,22 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
 int main(void) {
+  // *** SETUP ***
+  // parse the "DEBUG" env variable, define DEBUG if it was present and not 0
   char *DEBUG_STR = getenv("DEBUG");
+  int DEBUG = 0;
   if (DEBUG_STR) {
     int conv = atoi(DEBUG_STR);
     if (conv != 0) {
-      #define DEBUG
+      DEBUG = 1;
     }
   }
 
-  char path_buff[PATH_MAX];
+  // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
+  signal(SIGCHLD, SIG_IGN);
 
+  // *** MAIN LOOP ***
+  char path_buff[PATH_MAX];
   for (;;)
   {
     char *line;
@@ -69,10 +76,8 @@ int main(void) {
       if (parse(line, &cmd) == 1) {
         exec_command(&cmd);
 
-#ifdef DEBUG 
         // Just prints cmd
-        print_cmd(&cmd); 
-#endif
+        if (DEBUG) print_cmd(&cmd);
       }
       else {
         printf("Parse ERROR\n");
