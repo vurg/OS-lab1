@@ -38,28 +38,23 @@
 // without process groups, signals would only affect individual processes
 // process groups allow you to send signals to all processes in the pipeline at once
 
-// Global variable to track the foreground process group ID, 0 if none
-static pid_t foreground_pgid = 0;
 
-// Each pipeline creates its own process group and the shell tracks the foreground one
+// Each pipeline creates its own process group and passes terminal control to it
 void set_foreground_pgid(pid_t pgid) {
-    foreground_pgid = pgid;
+    tcsetpgrp(STDIN_FILENO, pgid); // pass terminal control to (child's) pgroup
 }
 
 // Function to clear the foreground process group after the process has finished
 void clear_foreground_pgid(void) {
-    foreground_pgid = 0;
+    tcsetpgrp(STDIN_FILENO, getpgrp()); // restore terminal control to shell
 }
 
 // *** SIGNAL HANDLER ***
 // Handler for SIGINT (Ctrl-C)
+//  if the shell is in foreground, do not stop it
 static void sigint_handler(int sig) {
-    // If there is a foreground process group, send SIGINT to it
-    if (foreground_pgid > 0) {
-        // terminate the foreground process group
-        kill(-foreground_pgid, SIGINT);
-    }
-    // Print a newline and redisplay the prompt
+    // If there is a foreground process group, terminal control is passed to it
+    // therefore SIGINT will go to that process group, not this handler
     printf("\n");
     rl_on_new_line(); // Inform readline that the cursor is on a new line
     rl_replace_line("", 0); // Clear the current input line
@@ -85,6 +80,11 @@ int main(void) {
   // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
   signal(SIGCHLD, SIG_IGN);
   
+  // ignore background read/write signals to prevent shell from being terminated
+  // if doing i/o while in background pgroup (while pipeline is in foreground)
+  signal(SIGTTIN, SIG_IGN);
+  signal(SIGTTOU, SIG_IGN);
+
   // handle SIGINT, do not terminate the shell, only the foreground process group
   signal(SIGINT, sigint_handler);
 
@@ -93,12 +93,17 @@ int main(void) {
   for (;;)
   {
     char *line;
-    if (getcwd(path_buff, sizeof(path_buff)) != NULL) {
-      printf("%s", path_buff);
+    char *prompt;
+    if (getcwd(path_buff, PATH_MAX) != NULL) {
+      size_t prompt_len = strlen(path_buff) + 2;
+      prompt = malloc((prompt_len + 1) * sizeof(char));
+      snprintf(prompt, prompt_len + 1, "%s> ", path_buff);
     }
-    line = readline("> ");
 
-    if (line == NULL) {
+    line = readline(prompt);
+    free(prompt);
+
+    if (rl_eof_found) {
       break;
     }
 
