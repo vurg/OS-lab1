@@ -35,11 +35,14 @@ static void print_pgm(Pgm *p);
 void stripwhite(char *);
 
 int main(void) {
+  // *** SETUP ***
+  // parse the "DEBUG" env variable, define DEBUG if it was present and not 0
   char *DEBUG_STR = getenv("DEBUG");
+  int DEBUG = 0;
   if (DEBUG_STR) {
     int conv = atoi(DEBUG_STR);
     if (conv != 0) {
-      #define DEBUG
+      DEBUG = 1;
     }
   }
 
@@ -69,10 +72,8 @@ int main(void) {
       if (parse(line, &cmd) == 1) {
         exec_command(&cmd);
 
-#ifdef DEBUG 
         // Just prints cmd
-        print_cmd(&cmd); 
-#endif
+        if (DEBUG) print_cmd(&cmd);
       }
       else {
         printf("Parse ERROR\n");
