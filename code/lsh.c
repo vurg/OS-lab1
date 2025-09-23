@@ -43,6 +43,8 @@
 // Handler for SIGINT (Ctrl-C)
 //  if the shell is in foreground, do not stop it
 static void sigint_handler(int sig) {
+    (void)sig; // ignore unused parameter warning
+
     // If there is a foreground process group, terminal control is passed to it
     // therefore SIGINT will go to that process group, not this handler
     printf("\n");
