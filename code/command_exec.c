@@ -27,7 +27,7 @@ void close_pipes(int pipes[][2], size_t n) {
  *           STDIN        ps[2][1]        ps[1][1]       ps[0][1]     <- stdin redirection
  *
  */
-void exec_pipe(Pgm *p) 
+void exec_pipe(Pgm *p, int is_background) 
 {
   // count the number of commands
   size_t ncmd = 0;
@@ -41,6 +41,8 @@ void exec_pipe(Pgm *p)
       exit(1);
     }
   }
+
+  if (is_background) printf("[bg]"); // header for printing out pid:s
 
   // loop through all commands
   pid_t pids[ncmd];
@@ -76,14 +78,18 @@ void exec_pipe(Pgm *p)
       perror("execvp");
       exit(1);
     }
-    // parent just passes to next iteration
+
+    // *** PARENT ***
     pids[i] = pid;
+    if (is_background) 
+      printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
   }
 
-  // *** PARENT ***
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
+
   for (size_t i = 0; i < ncmd; i++) {
-    waitpid(pids[i], NULL, 0);
+    // wait for each process, dont hang if in background
+    waitpid(pids[i], NULL, (is_background) ? WNOHANG : 0);
   }
 }
 
@@ -91,6 +97,6 @@ void exec_command(Command *cmd)
 {
   Pgm *p = cmd->pgm;
   if (handle_builtins(p)) return; // if builtin handled, return
-  exec_pipe(p);
+  exec_pipe(p, cmd->background);
 }
 
