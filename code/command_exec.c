@@ -43,6 +43,7 @@ void exec_pipe(Pgm *p)
   }
 
   // loop through all commands
+  pid_t pids[ncmd];
   Pgm* cur = p;
   for (size_t i = 0; i < ncmd; i++, cur = cur->next) {
     pid_t pid;
@@ -76,11 +77,14 @@ void exec_pipe(Pgm *p)
       exit(1);
     }
     // parent just passes to next iteration
+    pids[i] = pid;
   }
 
   // *** PARENT ***
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
-  while (wait(NULL) > 0); // reap children
+  for (size_t i = 0; i < ncmd; i++) {
+    waitpid(pids[i], NULL, 0);
+  }
 }
 
 void exec_command(Command *cmd)
