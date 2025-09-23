@@ -93,7 +93,7 @@ int main(void) {
     line = readline(prompt);
     free(prompt);
 
-    if (rl_eof_found) {
+    if (line == NULL) {
       break;
     }
 
