@@ -26,10 +26,21 @@
 #include <readline/history.h>
 #include <limits.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "parse.h"
 #include "command_exec.h"
 
+
+// *** SIGNAL HANDLER ***
+// Handler for SIGINT (Ctrl-C)
+static void sigint_handler(int sig) {
+    // Print a newline and redisplay the prompt
+    printf("\n");
+    rl_on_new_line(); // Inform readline that the cursor is on a new line
+    rl_replace_line("", 0); // Clear the current input line
+    rl_redisplay(); // Redisplay the shell prompt
+}
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
@@ -49,6 +60,9 @@ int main(void) {
 
   // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
   signal(SIGCHLD, SIG_IGN);
+  
+  // handle SIGINT
+  signal(SIGINT, sigint_handler);
 
   // *** MAIN LOOP ***
   char path_buff[PATH_MAX];
