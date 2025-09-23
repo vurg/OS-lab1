@@ -27,14 +27,38 @@
 #include <limits.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "parse.h"
 #include "command_exec.h"
 
+// *** PROCESS GROUP MANAGEMENT ***
+// we want the shell to terminate the entire pipeline, not just one process
+// without process groups, signals would only affect individual processes
+// process groups allow you to send signals to all processes in the pipeline at once
+
+// Global variable to track the foreground process group ID, 0 if none
+static pid_t foreground_pgid = 0;
+
+// Each pipeline creates its own process group and the shell tracks the foreground one
+void set_foreground_pgid(pid_t pgid) {
+    foreground_pgid = pgid;
+}
+
+// Function to clear the foreground process group after the process has finished
+void clear_foreground_pgid(void) {
+    foreground_pgid = 0;
+}
 
 // *** SIGNAL HANDLER ***
 // Handler for SIGINT (Ctrl-C)
 static void sigint_handler(int sig) {
+    // If there is a foreground process group, send SIGINT to it
+    if (foreground_pgid > 0) {
+        // terminate the foreground process group
+        kill(-foreground_pgid, SIGINT);
+    }
     // Print a newline and redisplay the prompt
     printf("\n");
     rl_on_new_line(); // Inform readline that the cursor is on a new line
@@ -61,7 +85,7 @@ int main(void) {
   // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
   signal(SIGCHLD, SIG_IGN);
   
-  // handle SIGINT
+  // handle SIGINT, do not terminate the shell, only the foreground process group
   signal(SIGINT, sigint_handler);
 
   // *** MAIN LOOP ***

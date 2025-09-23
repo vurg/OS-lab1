@@ -11,6 +11,9 @@
 #define PIPE_IN 0
 #define PIPE_OUT 1
 
+// External functions from lsh.c to manage foreground process group ID
+extern void set_foreground_pgid(pid_t pgid);
+extern void clear_foreground_pgid(void);
 
 void close_pipes(int pipes[][2], size_t n) {
   for (size_t i = 0; i < n; i++) {
@@ -30,6 +33,8 @@ void close_pipes(int pipes[][2], size_t n) {
  */
 void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 {
+  pid_t pgid = 0; // process group ID of the pipeline
+  
   // count the number of commands
   size_t ncmd = 0;
   for (Pgm *t = p; t != NULL; t = t->next) ++ncmd;
@@ -46,7 +51,7 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
   if (is_background) printf("[bg]"); // header for printing out pid:s
 
   // loop through all commands
-  pid_t pids[ncmd];
+  pid_t pids[ncmd]; // array to store each command's pid
   Pgm* cur = p;
   for (size_t i = 0; i < ncmd; i++, cur = cur->next) {
     pid_t pid;
@@ -62,6 +67,13 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
        *    stdout to read-end of pipe (read by the previous command)
        * - executes the command
       */
+
+      // Always create new process group for the first child
+      if (i == 0) {
+        setpgid(0, 0); // create new process group with this process as leader
+      } else {
+        // parent sets up process group for other children - parent calls setpgid
+      }
 
       if (i > 0) { // if not last command (not first in list)
         // connect stdout to write end of prev command (next command in list)
@@ -82,21 +94,40 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
       // if error
       perror("execvp");
       exit(1);
-    }
 
-    // *** PARENT ***
-    pids[i] = pid;
-    if (is_background) 
-      printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
+    } else {
+
+      /* *** PARENT *** */
+      pids[i] = pid;
+      
+      // Set process group for ALL children from parent side as well
+      // so that we don't rely on child executing first:
+      // no matter which process runs first, the pgid will be set correctly
+      if (i == 0) {
+        pgid = pid; // first child becomes the process group leader
+        setpgid(pid, 0); // create new process group with first child as leader
+      } else {
+        setpgid(pid, pgid); // add subsequent children to the group
+      }
+      
+      if (is_background) 
+        printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
+    }
   }
 
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
+
+  // Set foreground process group if not background
+  if (!is_background) {
+    set_foreground_pgid(pgid);
+  }
 
   // wait for each foreground process (bg processes reaped asynchronously)
   if (!is_background) {
     for (size_t i = 0; i < ncmd; i++) {
       waitpid(pids[i], NULL, 0);
     }
+    clear_foreground_pgid(); // clear the foreground pgid variable
   }
 }
 
