@@ -11,10 +11,6 @@
 #define PIPE_IN 0
 #define PIPE_OUT 1
 
-// External functions from lsh.c to manage foreground process group ID
-extern void set_foreground_pgid(pid_t pgid);
-extern void clear_foreground_pgid(void);
-
 void close_pipes(int pipes[][2], size_t n) {
   for (size_t i = 0; i < n; i++) {
     if (close(pipes[i][0]) < 0 ||
