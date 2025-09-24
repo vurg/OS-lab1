@@ -11,11 +11,23 @@
 #define PIPE_IN 0
 #define PIPE_OUT 1
 
-
 void close_pipes(int pipes[][2], size_t n) {
   for (size_t i = 0; i < n; i++) {
-    close(pipes[i][0]);
-    close(pipes[i][1]);
+    if (close(pipes[i][0]) < 0 ||
+        close(pipes[i][1]) < 0) {
+
+      perror("close");
+      exit(1);
+    }
+  }
+}
+
+void safe_dup2(int old_fd, int new_fd) {
+  if (old_fd != -1 && old_fd != new_fd) {
+    if (dup2(old_fd, new_fd) < 0) {
+      perror("dup2");
+      exit(1);
+    }
   }
 }
 
@@ -30,6 +42,8 @@ void close_pipes(int pipes[][2], size_t n) {
  */
 void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 {
+  pid_t pgid = 0; // process group ID of the pipeline
+  
   // count the number of commands
   size_t ncmd = 0;
   for (Pgm *t = p; t != NULL; t = t->next) ++ncmd;
@@ -46,7 +60,7 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
   if (is_background) printf("[bg]"); // header for printing out pid:s
 
   // loop through all commands
-  pid_t pids[ncmd];
+  pid_t pids[ncmd]; // array to store each command's pid
   Pgm* cur = p;
   for (size_t i = 0; i < ncmd; i++, cur = cur->next) {
     pid_t pid;
@@ -57,23 +71,32 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
 
     if (pid == 0) {
       /* *** CHILD ***
+       * - first child creates a pgroup and sets itself as leader
        * - connects needed pipes to stdin/-out
        *    stdout to write-end of pipe (written to by the previous command), if not last command
        *    stdout to read-end of pipe (read by the previous command)
        * - executes the command
       */
 
+      // Always create new process group for the first child
+      if (i == 0) {
+        setpgid(0, 0); // create new process group with this process as leader
+        // might be redundant, but avoids an edge case when child executes before parent gets to set pgroup
+      }
+      // parent sets up process group for other children - parent calls setpgid
+
       if (i > 0) { // if not last command (not first in list)
         // connect stdout to write end of prev command (next command in list)
-        dup2(pipes[i-1][1], STDOUT_FILENO); 
-      } else if (redir_fd[1] != -1 && redir_fd[1] != STDOUT_FILENO){
-        dup2(redir_fd[1], STDOUT_FILENO);
+        safe_dup2(pipes[i-1][1], STDOUT_FILENO); 
+      } else {
+        safe_dup2(redir_fd[1], STDOUT_FILENO); // redirect if needed
       }
+
       if (cur->next) { // if not first command (not last in list)
         // connect stdin to read end
-        dup2(pipes[i][0], STDIN_FILENO);
-      } else if (redir_fd[0] != -1 && redir_fd[0] != STDIN_FILENO) {
-        dup2(redir_fd[0], STDIN_FILENO);
+        safe_dup2(pipes[i][0], STDIN_FILENO);
+      } else {
+        safe_dup2(redir_fd[0], STDIN_FILENO); // redirect if needed
       }
 
       close_pipes(pipes, ncmd - 1); // close all pipes, not needed anymore (already dup:d)
@@ -82,21 +105,37 @@ void exec_pipe(Pgm *p, int redir_fd[2], int is_background)
       // if error
       perror("execvp");
       exit(1);
-    }
 
-    // *** PARENT ***
-    pids[i] = pid;
-    if (is_background) 
-      printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
+    } else {
+      /* *** PARENT *** */
+      pids[i] = pid;
+      
+      // Set process group for ALL children from parent side as well
+      // so that we don't rely on child executing first:
+      // no matter which process runs first, the pgid will be set correctly
+      if (i == 0) {
+        pgid = pid; // first child becomes the process group leader
+        setpgid(pid, 0); // create new process group with first child as leader
+      } else {
+        setpgid(pid, pgid); // add subsequent children to the group
+      }
+      
+      if (is_background) 
+        printf("\t%d %s %s\n", pid, *cur->pgmlist, (cur->next) ? "|" : ""); // print out pid:s and associated commands
+    }
   }
 
   close_pipes(pipes, ncmd - 1); // close all pipes, parent doesn't use them
 
-  // wait for each foreground process (bg processes reaped asynchronously)
   if (!is_background) {
+    tcsetpgrp(STDIN_FILENO, pgid); // set pipeline pgroup as foreground
+
+    // wait for each foreground process (bg processes reaped asynchronously)
     for (size_t i = 0; i < ncmd; i++) {
       waitpid(pids[i], NULL, 0);
     }
+
+    tcsetpgrp(STDIN_FILENO, getpgrp()); // set shell to foreground
   }
 }
 

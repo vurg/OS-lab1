@@ -26,10 +26,32 @@
 #include <readline/history.h>
 #include <limits.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "parse.h"
 #include "command_exec.h"
 
+// *** PROCESS GROUP MANAGEMENT ***
+// we want the shell to terminate the entire pipeline, not just one process
+// without process groups, signals would only affect individual processes
+// process groups allow you to send signals to all processes in the pipeline at once
+
+
+// *** SIGNAL HANDLER ***
+// Handler for SIGINT (Ctrl-C)
+//  if the shell is in foreground, do not stop it
+static void sigint_handler(int sig) {
+    (void)sig; // ignore unused parameter warning
+
+    // If there is a foreground process group, terminal control is passed to it
+    // therefore SIGINT will go to that process group, not this handler
+    printf("\n");
+    rl_on_new_line(); // Inform readline that the cursor is on a new line
+    rl_replace_line("", 0); // Clear the current input line
+    rl_redisplay(); // Redisplay the shell prompt
+}
 
 static void print_cmd(Command *cmd);
 static void print_pgm(Pgm *p);
@@ -49,16 +71,29 @@ int main(void) {
 
   // ignore SIGHCLD:s, which makes exited children be removed instead of turned into zombies
   signal(SIGCHLD, SIG_IGN);
+  
+  // ignore background read/write signals to prevent shell from being terminated
+  // if doing i/o while in background pgroup (while pipeline is in foreground)
+  signal(SIGTTIN, SIG_IGN);
+  signal(SIGTTOU, SIG_IGN);
+
+  // handle SIGINT, do not terminate the shell, only the foreground process group
+  signal(SIGINT, sigint_handler);
 
   // *** MAIN LOOP ***
   char path_buff[PATH_MAX];
   for (;;)
   {
     char *line;
-    if (getcwd(path_buff, sizeof(path_buff)) != NULL) {
-      printf("%s", path_buff);
+    char *prompt;
+    if (getcwd(path_buff, PATH_MAX) != NULL) {
+      size_t prompt_len = strlen(path_buff) + 2;
+      prompt = malloc((prompt_len + 1) * sizeof(char));
+      snprintf(prompt, prompt_len + 1, "%s> ", path_buff);
     }
-    line = readline("> ");
+
+    line = readline(prompt);
+    free(prompt);
 
     if (line == NULL) {
       break;
